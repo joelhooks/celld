@@ -288,6 +288,7 @@ pub fn validate() -> anyhow::Result<()> {
     }
 
     shutdown_timing()?;
+    crate::fetch_egress::Floor::from_env().map_err(anyhow::Error::msg)?;
 
     positive::<usize>("CELLD_MAX_DYNAMIC_WORKER_CODE_BYTES")?;
 

@@ -718,13 +718,14 @@ impl CellJob {
 thread_local! {
     // One outbound HTTP client per JS thread — building it per fetch rebuilds
     // the TLS stack every call (async-op-hazards.md).
-    static HTTP: reqwest::Client = reqwest::Client::new();
-    static HTTP_MANUAL: reqwest::Client = reqwest::Client::builder()
+    static HTTP: reqwest::Client = crate::fetch_egress::floor().following_builder()
+        .build().unwrap();
+    static HTTP_MANUAL: reqwest::Client = crate::fetch_egress::floor().builder()
         .redirect(reqwest::redirect::Policy::none()).build().unwrap();
     // A separate policy stops an `error` request before reqwest can replay it
     // at the destination. Inspecting the final response would be too late:
     // the method, body, and credentials could already have left the process.
-    static HTTP_ERROR: reqwest::Client = reqwest::Client::builder()
+    static HTTP_ERROR: reqwest::Client = crate::fetch_egress::floor().builder()
         .redirect(reqwest::redirect::Policy::custom(|attempt| {
             attempt.error("fetch redirect mode is error")
         })).build().unwrap();
@@ -744,6 +745,9 @@ impl std::error::Error for RedirectSubrequestLimit {}
 fn fetch_request_error(error: &reqwest::Error) -> String {
     let mut source: &(dyn std::error::Error + 'static) = error;
     loop {
+        if source.is::<crate::fetch_egress::Refusal>() {
+            return crate::fetch_egress::Refusal.to_string();
+        }
         if let Some(limit) = source.downcast_ref::<RedirectSubrequestLimit>() {
             return limit.0.clone();
         }
@@ -1413,7 +1417,11 @@ fn resolve_res(tc: &mut v8::PinScope, id: u64, res: Result<asyncrt::OpOut, Strin
         }
         Err(e) => {
             let s = v8::String::new(tc, &e).unwrap();
-            let ex = v8::Exception::error(tc, s);
+            let ex = if crate::fetch_egress::is_refusal(&e) {
+                v8::Exception::type_error(tc, s)
+            } else {
+                v8::Exception::error(tc, s)
+            };
             r.reject(tc, ex);
         }
     }
@@ -9111,6 +9119,16 @@ fn op_fetch(
         rv.set(promise);
         return;
     }
+    // Literal hosts never reach reqwest's resolver. This applies only after
+    // the broker branch, so bindings keep their own egress contract.
+    if let Ok(parsed) = reqwest::Url::parse(&url) {
+        if let Err(error) = crate::fetch_egress::floor().check_url(&parsed) {
+            let message = v8::String::new(scope, &error.to_string()).unwrap();
+            let exception = v8::Exception::type_error(scope, message);
+            scope.throw_exception(exception);
+            return;
+        }
+    }
     // Select the client only for direct egress: a broker must not initialize
     // an unused network client and its TLS stack.
     let client = match redirect.as_str() {
@@ -11092,8 +11110,14 @@ impl IoContext {
         self.redirect_client
             .get_or_init(|| {
                 let context = Arc::downgrade(self);
-                reqwest::Client::builder()
+                crate::fetch_egress::floor()
+                    .builder()
                     .redirect(reqwest::redirect::Policy::custom(move |attempt| {
+                        if let Err(error) = crate::fetch_egress::floor()
+                            .check_redirect(attempt.url(), attempt.previous())
+                        {
+                            return attempt.error(error);
+                        }
                         if attempt.previous().len() >= 10 {
                             return attempt.error("too many redirects");
                         }
