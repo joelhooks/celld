@@ -340,6 +340,7 @@ pub mod docker;
 pub mod drain_token;
 pub mod engine_api;
 pub mod env_vars;
+pub(crate) mod fetch_egress;
 #[cfg(celld_internal_tests)]
 #[allow(clippy::disallowed_methods)]
 #[doc(hidden)]

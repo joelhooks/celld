@@ -173,6 +173,53 @@ the eviction request pending.
 An error does not prove that the runtime remains resident. A malformed scope
 still returns status 400 through the existing scope validation.
 
+## Restrict direct Worker fetches
+
+A Worker can validate a URL but cannot see the addresses used to connect to
+its hostname. Set `CELLD_FETCH_PRIVATE=deny` before starting celld when Workers
+fetch caller-chosen URLs. Unset preserves the existing unrestricted behavior.
+Invalid settings stop startup. Restart celld after changing either setting.
+
+The direct `fetch()` clients filter every DNS answer at connection time and
+fail if none remain. This is not a preflight lookup: a rebinding answer is
+filtered before it can reach the connector. Literal IP URLs bypass DNS in
+reqwest, so celld checks those before sending and checks literal redirect
+targets before following. Named redirect targets use the same resolver.
+The default redirect count and invocation subrequest budget still apply.
+A refusal is a `TypeError` naming the setting and remedy, without revealing
+resolved addresses.
+
+The floor denies these ranges:
+
+- IPv4: `0.0.0.0/8`, `10.0.0.0/8`, `100.64.0.0/10`, `127.0.0.0/8`,
+  `169.254.0.0/16`, `172.16.0.0/12`, `192.0.0.0/24`, `192.168.0.0/16`,
+  `198.18.0.0/15`, `224.0.0.0/4`, and `240.0.0.0/4`.
+- IPv6: `::`, `::1`, `fc00::/7`, `fe80::/10`, `ff00::/8`, and IPv4-mapped
+  or `64:ff9b::/96` NAT64 encodings of the denied IPv4 ranges. For
+  `2002::/16` (6to4), the embedded IPv4 address is checked against those same
+  denied IPv4 ranges.
+
+`CELLD_FETCH_ALLOW` accepts comma-separated exact `IP:port` pairs. Use
+`[IPv6]:port` for IPv6. An exception admits a private address only when the
+URL itself uses that literal and effective port. A hostname resolving to an
+excepted address is still refused. A redirect chain originating at a name
+cannot gain access to an excepted private literal. No hostname, CIDR, wildcard,
+or address-only exception is accepted. Exceptions are operator-granted access
+to those exact endpoints, so keep them narrow.
+
+In restricted mode these clients ignore environment HTTP proxies, including
+`HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY`: a proxy could resolve destinations
+outside the local address filter. With the setting unset, proxy behavior is
+unchanged. Teredo is not decoded by this floor. Network routing, custom
+translation prefixes, and public endpoints
+that relay requests remain outside this address floor. It does not replace a
+network firewall or make celld safe for hostile multi-tenant use.
+
+This setting applies only to the direct `EgressPolicy::Allow` fetch path,
+including `follow`, `manual`, and `error` redirect modes. Outbound WebSockets
+use a separate connector. Service bindings, `globalOutbound` brokers, TCP
+bindings, and host/provider clients are unchanged.
+
 ## Set the forwarded-header policy
 
 celld ignores `X-Forwarded-Host` and `X-Forwarded-Proto` by default. Set

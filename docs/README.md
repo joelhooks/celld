@@ -1091,6 +1091,8 @@ For the full list, run `celld -h`. This table shows the primary settings:
 | `CELLD_NODE` | An explicit node-session ID. Use 1 to 128 ASCII letters, numbers, dots, dashes, or underscores. The value cannot be `.` or `..` |
 | `CELLD_WATCH` | The local work directory for SQLite and replication |
 | `CELLD_ESBUILD` | The path of the esbuild executable |
+| `CELLD_FETCH_PRIVATE` | Unset: direct Worker fetches are unrestricted. `deny`: filter non-public connection addresses, including redirect hops; ignore environment HTTP proxies for these fetches. See [security](security.md#restrict-direct-worker-fetches) |
+| `CELLD_FETCH_ALLOW` | Comma-separated exact `IP:port` exceptions for literal URLs when `CELLD_FETCH_PRIVATE=deny`; bracket IPv6. Names never inherit an exception. Unset: no exceptions |
 | `CELLD_ACTIVATIONS` | The limit for concurrent cold-cell activations (default: 8 for each available CPU, at least 16 and at most 128). A cold activation waits on the object store for most of its time, so the default is above the CPU count |
 | `CELLD_DEPLOY_POLL_S` | The interval in seconds at which a node reads the deployment pointer and adopts a new deployment in place (default: 30) |
 | `CELLD_DEPLOY_MAX_AGE_S` | How long a resident Durable Object can keep the previous deployment's code after an adoption before celld forces the move (default: 60; 0 forces at once) |

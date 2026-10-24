@@ -395,6 +395,21 @@ Inc. a perpetual, irrevocable, worldwide, royalty-free, transferable,
 sublicensable license to use, modify, combine, relicense, redistribute, or
 publish the patch, in whole or in part, with or without attribution.
 
+## Direct fetch address floor
+
+Workers that fetch caller-chosen URLs can opt into a connection-address floor.
+These settings apply to direct Worker `fetch()`, not outbound WebSockets,
+service bindings, or host/provider traffic.
+
+| Environment variable | Behavior |
+| --- | --- |
+| `CELLD_FETCH_PRIVATE` | Unset preserves unrestricted fetches. Set to `deny` to refuse non-public destinations at connect time and on redirects. |
+| `CELLD_FETCH_ALLOW` | Optional comma-separated exact `IP:port` exceptions, for IP-literal URLs only. Bracket IPv6. |
+
+See the [security policy](docs/security.md#restrict-direct-worker-fetches)
+for ranges, proxy behavior, and limitations, and the full
+[environment table](docs/README.md#environment-variables).
+
 ## License
 
 [Apache-2.0](LICENSE)
